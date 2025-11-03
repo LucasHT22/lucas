@@ -1,0 +1,10 @@
+[package]
+name = "lucaslang"
+version = "0.1.0"
+edition = "2025"
+authors = ["Lucas <lucas@devlucas.page>"]
+description = "A scripting language in Portuguese"
+license = "MIT"
+
+[dependencies]
+lazy_static = "1.4"
