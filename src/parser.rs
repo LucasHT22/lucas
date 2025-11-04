@@ -4,7 +4,7 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 pub struct Parser {
-    tokens: Peekable<IntroIter<Token>>,
+    tokens: Peekable<IntoIter<Token>>,
 }
 
 impl Parser {
@@ -84,7 +84,7 @@ impl Parser {
     fn statement(&mut self) -> Option<Stmt> {
         if let Some(tok) = self.peek() {
             match tok.tipo {
-                TokenType::Imprimir => { self.advance(); let expr = self.expression(); if let Some(s) = self.peek() { if p.tipo==TokenType::PontoVirgul { self.advance(); } } return Some(Stmt::Imprimir(expr)); }
+                TokenType::Imprimir => { self.advance(); let expr = self.expression(); if let Some(s) = self.peek() { if p.tipo==TokenType::PontoVirgula { self.advance(); } } return Some(Stmt::Imprimir(expr)); }
                 TokenType::AbreChave => return self.block(),
                 TokenType::Se => {
                     self.advance();
@@ -129,7 +129,7 @@ impl Parser {
                     if let Some(init_stmt) = init { if let Some(s) = init_stmt { stmts.push(s); } }
                     let while_cond = cond.unwrap_or(Expr::Bool(true));
 
-                    let mut inner = Vec::New();
+                    let mut inner = Vec::new();
                     inner.push(body);
                     if let Some(inc_expr) = incr {
                         inner.push(Stmt::ExprStmt(inc_expr));

@@ -36,6 +36,7 @@ impl Value {
     }
 }
 
+#[derive(Debug)]
 pub struct Function {
     pub name: String,
     pub params: Vec<String>,
@@ -129,7 +130,7 @@ impl Interpreter {
             }
             Stmt::If(cond, then_branch, else_branch) => {
                 let c = self.evaluate(cond)?;
-                if c is_truthy() {
+                if c.is_truthy() {
                     self.execute(then_branch)?
                 } else if let Some(eb) = else_branch {
                     self.execute(eb)?
