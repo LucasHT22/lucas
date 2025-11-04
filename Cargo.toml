@@ -1,5 +1,5 @@
 [package]
-name = "lucaslang"
+name = "lucas"
 version = "0.1.0"
 edition = "2021"
 authors = ["Lucas <lucas@devlucas.page>"]

@@ -6,20 +6,48 @@ mod parser;
 mod environment;
 mod interpreter;
 mod errors;
+mod repl;
 
 use std::env;
 use std::fs;
-use interpreter::Interpreter;
+use std::process;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Uso: lucaslang <arquivo.lucas>");
-        eprintln!("Ex.: cargo run -- exemplos/ola.lucas");
-        std::process::exit(1);
+    
+    match args.len() {
+        1 => {
+            let mut repl = repl::Repl::new();
+            repl.run();
+        }
+        2 => {
+            let filename = &args[1];
+            run_file(filename);
+        }
+        _ => {
+            print_usage();
+            process::exit(1);
+        }
     }
-    let path = &args[1];
-    let src = fs::read_to_string(path).expect("Não foi possível ler o arquivo.");
-    let mut interp = Interpreter::new();
-    interp.run(&src);
+}
+
+fn run_file(filename: &str) {
+    let contents = fs::read_to_string(filename).unwrap_or_else(|err| {
+        eprintln!("Erro ao ler arquivo '{}': {}", filename, err);
+        process::exit(1);
+    });
+
+    let mut interpreter = interpreter::Interpreter::new();
+    interpreter.run(&contents);
+}
+
+fn print_usage() {
+    println!("🚀 Lucas - Lucas Language");
+    println!("\nUso:");
+    println!("  lucas              - Inicia o REPL interativo");
+    println!("  lucas <arquivo>    - Executa um arquivo .lucas");
+    println!("\nExemplos:");
+    println!("  lucas                    # REPL");
+    println!("  lucas programa.lucas     # Executa arquivo");
+    println!("  lucas exemplos/ola.lucas # Executa exemplo");
 }

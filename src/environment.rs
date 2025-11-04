@@ -6,10 +6,9 @@ use crate::interpreter::Value;
 
 pub type EnvRef = Rc<RefCell<Environment>>;
 
-#[derive(Debug, Clone)]
 pub struct Environment {
     values: HashMap<String, Value>,
-    pub enclosing: Option<EnvRef>,
+    enclosing: Option<EnvRef>,
 }
 
 impl Environment {
@@ -42,5 +41,12 @@ impl Environment {
             return enc.borrow().get(name);
         }
         Err(format!("Variável '{}' não definida.", name))
+    }
+
+    pub fn get_all_variables(&self) -> Vec<(String, Value)> {
+        let mut vars: Vec<(String, Value)> = self.values.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
+        vars.sort_by(|a, b| a.0.cmp(&b.0));
+        vars
     }
 }
