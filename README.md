@@ -17,3 +17,13 @@ git clone https://github.com/LucasHT22/lucas
 ```
 cargo build
 ```
+
+#### Run REPL
+
+```
+cargo run
+```
+
+### Resources
+
+- [Crafting Inpreters](https://craftinginterpreters.com/)
