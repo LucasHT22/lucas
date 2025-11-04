@@ -1,3 +1,3 @@
-pub fn erro(msg: &str, linha: usize) {
-    eprintln!("Erro na linha {}: {}", linha, msg);
+pub fn erro(msg: &str) {
+    eprintln!("Erro {}", msg);
 }
