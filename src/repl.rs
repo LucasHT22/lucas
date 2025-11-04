@@ -2,8 +2,8 @@ use crate::interpreter::Interpreter;
 use std::io::{self, Write};
 
 pub struct Repl {
-    interpreter: Interpreter::new(),
-    history: Vec::new(),
+    interpreter: Interpreter,
+    history: Vec<String>,
 }
 
 impl Repl {
@@ -21,7 +21,7 @@ impl Repl {
             print!(">>> ");
             io::stdout().flush().unwrap();
 
-            let mut input= String::new();
+            let mut input = String::new();
             match io::stdin().read_line(&mut input) {
                 Ok(_) => {
                     let input = input.trim();
@@ -35,12 +35,12 @@ impl Repl {
                         break;
                     }
 
-                    if input == "ajuda" || input == "help" {
+                    if input == "ajuda" || input == "help" || input == "quit" {
                         self.print_help();
                         continue;
                     }
 
-                    if input == "limpar" || input == "clean" {
+                    if input == "limpar" || input == "clear" {
                         self.clear_screen();
                         continue;
                     }
@@ -59,7 +59,7 @@ impl Repl {
                     self.execute(input);
                 }
                 Err(error) => {
-                    eprintln!("Error ao ler entrada: {}", error);
+                    eprintln!("Erro ao ler entrada: {}", error);
                     break;
                 }
             }
@@ -88,21 +88,21 @@ impl Repl {
         println!("\n╔═══════════════════════════════════════════════════╗");
         println!("║            Lucas Language REPL v0.1.0             ║");
         println!("╚═══════════════════════════════════════════════════╝");
-        println!("\n Digite 'ajuda' para ver comandos disponíveis");
-        println!(" Digite 'sair' para encerrar\n");
+        println!("\nDigite 'ajuda' para ver comandos disponíveis");
+        println!("Digite 'sair' para encerrar\n");
     }
 
     fn print_goodbye(&self) {
-        println!("\n Volte logo!! Obrigado por usar Lucas Language!");
+        println!("\nVolte logo!! Obrigado por usar Lucas Language!");
     }
 
     fn print_help(&self) {
         println!("\nComandos Disponíveis:");
-        println!("  ajuda, help       - Mostra esta mensagem");
-        println!("  sair, exit, quit  - Sai do REPL");
-        println!("  limpar, clear     - Limpa a tela");
+        println!("  ajuda, help        - Mostra esta mensagem");
+        println!("  sair, exit, quit   - Sai do REPL");
+        println!("  limpar, clear      - Limpa a tela");
         println!("  historico, history - Mostra histórico de comandos");
-        println!("  variaveis, vars   - Mostra variáveis definidas");
+        println!("  variaveis, vars    - Mostra variáveis definidas");
         println!("\nExemplos:");
         println!("  >>> 2 + 2");
         println!("  >>> variavel x = 10");
@@ -121,7 +121,7 @@ impl Repl {
             println!("Histórico vazio");
             return;
         }
-        
+
         println!("\nHistórico de Comandos:");
         for (i, cmd) in self.history.iter().enumerate() {
             println!("  [{}] {}", i + 1, cmd);
@@ -131,10 +131,10 @@ impl Repl {
 
     fn print_variables(&self) {
         println!("\nVariáveis Globais:");
-        
+
         let globals = self.interpreter.globals.borrow();
         let vars = globals.get_all_variables();
-        
+
         if vars.is_empty() {
             println!("  (nenhuma variável definida)");
         } else {
