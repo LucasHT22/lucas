@@ -1,0 +1,9 @@
+variavel nome = "Lucas";
+
+imprimir("Olá " + nome);
+
+funcao soma(a, b) {
+    retorne a + b;
+}
+
+imprimir(soma(2,10));
