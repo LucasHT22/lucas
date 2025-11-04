@@ -46,7 +46,7 @@ impl Repl {
                     }
 
                     if input == "historico" || input == "history" {
-                        self.print_story();
+                        self.print_history();
                         continue;
                     }
 
