@@ -73,8 +73,14 @@ impl Lexer {
         use TokenType::*;
         let mut tokens: Vec<Token> = Vec::new();
 
-        while let Some(ch) = self.espiar() {
+        while self.espiar().is_some() {
             self.pular_espacos();
+
+            if self.espiar().is_none() {
+                break;
+            }
+
+            let ch = self.espiar().unwrap();
             let linha = self.linha;
 
             let token = match ch {
@@ -166,7 +172,8 @@ impl Lexer {
                     if self.espiar() == Some('"') {
                         self.avancar();
                     }
-                    Token::new(Texto, s, linha)
+                    let lexema = format!("\"{}\"", s);
+                    Token::new(Texto(s), lexema, linha)
                 }
                 d if d.is_ascii_digit() => {
                     let mut num = String::new();
@@ -178,7 +185,8 @@ impl Lexer {
                             break;
                         }
                     }
-                    Token::new(Numero, num, linha)
+                    let valor = num.parse::<f64>().unwrap_or(0.0);
+                    Token::new(Numero(valor), num, linha)
                 }
                 a if a.is_alphabetic() || a == '_' => {
                     let mut id = String::new();
@@ -193,9 +201,9 @@ impl Lexer {
 
                     let mapa = palavras_chave();
                     if let Some(tt) = mapa.get(id.as_str()) {
-                        Token::new(tt.clone(), id, linha)
+                        Token::new(tt.clone(), id.clone(), linha)
                     } else {
-                        Token::new(Ident, id, linha)
+                        Token::new(Ident(id.clone()), id, linha)
                     }
                 }
                 _ => {

@@ -76,7 +76,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self { 
         let g = Rc::new(RefCell::new(Environment::new()));
-        let mut it = Self { globals: g.clone(), env: g.clone() };
+        let it = Self { globals: g.clone(), env: g.clone() };
         {
             let print_fn = Rc::new(Function {
                 name: "imprimir".into(),
@@ -131,10 +131,12 @@ impl Interpreter {
             Stmt::If(cond, then_branch, else_branch) => {
                 let c = self.evaluate(cond)?;
                 if c.is_truthy() {
-                    self.execute(then_branch)?
+                    return self.execute(then_branch);
                 } else if let Some(eb) = else_branch {
-                    self.execute(eb)?
-                } else { Ok(None) }
+                    return self.execute(eb);
+                } else { 
+                    Ok(None) 
+                }
             }
             Stmt::While(cond, body) => {
                 while self.evaluate(cond)?.is_truthy() {
@@ -185,8 +187,6 @@ impl Interpreter {
                             (Value::Text(a), Value::Text(b)) => Ok(Value::Text(a + &b)),
                             (Value::Text(a), b2) => Ok(Value::Text(a + &b2.to_string_repr())),
                             (a2, Value::Text(b)) => Ok(Value::Text(a2.to_string_repr() + &b)),
-                            (Value::Number(a), Value::Text(b)) => Ok(Value::Text(format!("{}{}", a, b))),
-                            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
                             _ => Err("Operador '+' inválido para operandos".into())
                         }
                     }

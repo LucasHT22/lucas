@@ -3,7 +3,7 @@ variavel nome = "Lucas";
 imprimir("Olá " + nome);
 
 funcao soma(a, b) {
-    retorne a + b;
+    retornar a + b;
 }
 
 imprimir(soma(2,10));

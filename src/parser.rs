@@ -37,7 +37,7 @@ impl Parser {
 
     fn var_declaration(&mut self) -> Option<Stmt> {
         let name = if let Some(tok) = self.advance() {
-            if let TokenType::Ident(n) = tok.tipo { n } else { return None; }
+            if let TokenType::Ident(_) = tok.tipo { tok.lexema } else { return None; }
         } else { return None; };
 
         if let Some(tok) = self.advance() {
@@ -54,7 +54,7 @@ impl Parser {
 
     fn func_declaration(&mut self) -> Option<Stmt> {
         let name = if let Some(tok) = self.advance() {
-            if let TokenType::Ident(n) = tok.tipo { n } else { return None; }
+            if let TokenType::Ident(_) = tok.tipo { tok.lexema } else { return None; }
         } else { return None; };
 
         let tok = self.advance(); if tok.is_none() { return None; }
@@ -65,7 +65,7 @@ impl Parser {
             if p.tipo != TokenType::FechaPar {
                 loop {
                     if let Some(tok) = self.advance() {
-                        if let TokenType::Ident(n) = tok.tipo { params.push(n); } else { return None }
+                        if let TokenType::Ident(_) = tok.tipo { params.push(tok.lexema); } else { return None }
                     } else { return None; }
                     if let Some(peek) = self.peek() {
                         if peek.tipo == TokenType::Virgula { self.advance(); continue; } else { break; }
@@ -84,7 +84,14 @@ impl Parser {
     fn statement(&mut self) -> Option<Stmt> {
         if let Some(tok) = self.peek() {
             match tok.tipo {
-                TokenType::Imprimir => { self.advance(); let expr = self.expression(); if let Some(s) = self.peek() { if p.tipo==TokenType::PontoVirgula { self.advance(); } } return Some(Stmt::Imprimir(expr)); }
+                TokenType::Imprimir => { 
+                    self.advance(); 
+                    let expr = self.expression(); 
+                    if let Some(s) = self.peek() { 
+                        if s.tipo == TokenType::PontoVirgula { self.advance(); } 
+                    } 
+                    return Some(Stmt::Imprimir(expr)); 
+                }
                 TokenType::AbreChave => return self.block(),
                 TokenType::Se => {
                     self.advance();
@@ -123,10 +130,10 @@ impl Parser {
                     } else { None };
 
                     if let Some(t) = self.advance() { if t.tipo != TokenType::FechaPar {return None; } } else { return None; }
-                    let mut body = self.statement().map(|s| s).unwrap_or(Stmt::Bloco(vec![]));
+                    let body = self.statement().map(|s| s).unwrap_or(Stmt::Bloco(vec![]));
 
                     let mut stmts = Vec::new();
-                    if let Some(init_stmt) = init { if let Some(s) = init_stmt { stmts.push(s); } }
+                    if let Some(init_stmt) = init { stmts.push(init_stmt); }
                     let while_cond = cond.unwrap_or(Expr::Bool(true));
 
                     let mut inner = Vec::new();
@@ -228,7 +235,7 @@ impl Parser {
                 }
             } else { break; }
         }
-        exp
+        expr
     }
 
     fn factor(&mut self) -> Expr {
