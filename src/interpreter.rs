@@ -28,13 +28,20 @@ impl Value {
     pub fn to_string_repr(&self) -> String {
         match self {
             Value::Number(n) => {
-                if (n.fract() - 0.0).abs() < 1e-10 { format!("{}", *n as i64) } else { format!("{}", n) }
+                if (n.fract() - 0.0).abs() < 1e-10 { 
+                    format!("{}", *n as i64) 
+                } else { 
+                    format!("{}", n) 
+                }
             }
             Value::Text(s) => s.clone(),
             Value::Bool(b) => format!("{}", b),
             Value::Nil => "nulo".into(),
             Value::Array(arr) => {
-                let items: Vec<String> = arr.borrow().iter().map(|v| v.to_string_repr()).collect();
+                let items: Vec<String> = arr.borrow()
+                    .iter()
+                    .map(|v| v.to_string_repr())
+                    .collect();
                 format!("[{}]", items.join(", "))
             }
             Value::Function(f) => format!("<fn {}>", f.name),
@@ -50,13 +57,6 @@ pub struct Function {
     pub closure: EnvRef,
 }
 
-pub enum FlowControl {
-    None,
-    Return(Value),
-    Break,
-    Continue,
-}
-
 impl Function {
     pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, String> {
         if args.len() != self.params.len() {
@@ -68,15 +68,12 @@ impl Function {
         }
         let prev_env = interpreter.env.clone();
         interpreter.env = env.clone();
-        let mut ret_val: Option<Value> = None;
+        
+        let mut ret_val = Value::Nil;
         for stmt in &self.body {
-            match interpreter.execute(stmt) {
-                FlowControl::Return(v) => { ret_val = v; break; }
-                FlowControl::Break | FlowControl::Continue => {
-                    interpreter.env = prev_env;
-                    return Err("'parar' ou 'continuar' fora de loop".into());
-                }
-                FlowControl::None => {}
+            match interpreter.execute(stmt)? {
+                Some(v) => { ret_val = v; break; }
+                None => {}
             }
         }
         interpreter.env = prev_env;
@@ -93,7 +90,11 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self { 
         let g = Rc::new(RefCell::new(Environment::new()));
-        let it = Self { globals: g.clone(), env: g.clone(), fonte: String::new(), };
+        let it = Self { 
+            globals: g.clone(), 
+            env: g.clone(),
+            fonte: String::new(),
+        };
         
         it.globals.borrow_mut().define("imprimir".into(), Value::Function(Rc::new(Function {
             name: "imprimir".into(),
@@ -101,21 +102,21 @@ impl Interpreter {
             body: vec![],
             closure: it.globals.clone(),
         })));
-
+        
         it.globals.borrow_mut().define("comprimento".into(), Value::Function(Rc::new(Function {
             name: "comprimento".into(),
             params: vec!["x".into()],
             body: vec![],
             closure: it.globals.clone(),
         })));
-
+        
         it.globals.borrow_mut().define("maiuscula".into(), Value::Function(Rc::new(Function {
             name: "maiuscula".into(),
             params: vec!["x".into()],
             body: vec![],
             closure: it.globals.clone(),
         })));
-
+        
         it.globals.borrow_mut().define("minuscula".into(), Value::Function(Rc::new(Function {
             name: "minuscula".into(),
             params: vec!["x".into()],
@@ -125,6 +126,7 @@ impl Interpreter {
     }
 
     pub fn run(&mut self, source: &str) {
+        self.fonte = source.to_string();
         let tokens = crate::lexer::Lexer::new(source).tokenize();
         let mut parser = crate::parser::Parser::new(tokens);
         let stmts = parser.parse();
@@ -136,9 +138,12 @@ impl Interpreter {
         }
     }
 
-    pub fn execute(&mut self, stmt: &Stmt) -> Result<Option<Value>, String> {
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<FlowControl, String> {
         match stmt {
-            Stmt::ExprStmt(e) => { self.evaluate(e)?; Ok(FlowControl::None) }
+            Stmt::ExprStmt(e) => { 
+                self.evaluate(e)?; 
+                Ok(FlowControl::None) 
+            }
             Stmt::Imprimir(e) => {
                 let v = self.evaluate(e)?;
                 println!("{}", v.to_string_repr());
@@ -147,6 +152,23 @@ impl Interpreter {
             Stmt::VarDecl(name, init) => {
                 let v = self.evaluate(init)?;
                 self.env.borrow_mut().define(name.clone(), v);
+                Ok(FlowControl::None)
+            }
+            Stmt::Bloco(stmts) => {
+                let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
+                let prev = self.env.clone();
+                self.env = new_env;
+                
+                for s in stmts {
+                    match self.execute(s)? {
+                        FlowControl::None => {}
+                        flow => {
+                            self.env = prev;
+                            return Ok(flow);
+                        }
+                    }
+                }
+                self.env = prev;
                 Ok(FlowControl::None)
             }
             Stmt::If(cond, then_branch, else_branch) => {
@@ -174,18 +196,18 @@ impl Interpreter {
                 let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
                 let prev = self.env.clone();
                 self.env = new_env;
-
+                
                 if let Some(init_stmt) = init {
                     self.execute(init_stmt)?;
                 }
-
+                
                 loop {
                     if let Some(cond_expr) = cond {
                         if !self.evaluate(cond_expr)?.is_truthy() {
                             break;
                         }
                     }
-
+                    
                     match self.execute(body)? {
                         FlowControl::Break => break,
                         FlowControl::Continue => {},
@@ -195,12 +217,12 @@ impl Interpreter {
                         }
                         FlowControl::None => {}
                     }
-
+                    
                     if let Some(incr_expr) = incr {
                         self.evaluate(incr_expr)?;
                     }
                 }
-
+                
                 self.env = prev;
                 Ok(FlowControl::None)
             }
@@ -294,7 +316,11 @@ impl Interpreter {
                 let r = self.evaluate(right)?;
                 match op {
                     UnarioOp::Neg => {
-                        if let Value::Number(n) = r { Ok(Value::Number(-n)) } else { Err("Operador unário '-' espera número".into()) }
+                        if let Value::Number(n) = r { 
+                            Ok(Value::Number(-n)) 
+                        } else { 
+                            Err("Operador unário '-' espera número".into()) 
+                        }
                     }
                     UnarioOp::Nao => Ok(Value::Bool(!r.is_truthy()))
                 }
@@ -313,20 +339,52 @@ impl Interpreter {
                         }
                     }
                     BinOp::Sub => {
-                        if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Number(a - b)) } else { Err("'-' espera números".into()) }
+                        if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                            Ok(Value::Number(a - b)) 
+                        } else { 
+                            Err("'-' espera números".into()) 
+                        }
                     }
                     BinOp::Mul => {
-                        if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Number(a * b)) } else { Err("'*' espera números".into()) }
+                        if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                            Ok(Value::Number(a * b)) 
+                        } else { 
+                            Err("'*' espera números".into()) 
+                        }
                     }
                     BinOp::Div => {
-                        if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Number(a / b)) } else { Err("'/' espera números".into()) }
+                        if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                            if b == 0.0 {
+                                Err("Divisão por zero".into())
+                            } else {
+                                Ok(Value::Number(a / b))
+                            }
+                        } else { 
+                            Err("'/' espera números".into()) 
+                        }
                     }
                     BinOp::Eq => Ok(Value::Bool(self.is_equal(&l, &r))),
                     BinOp::Neq => Ok(Value::Bool(!self.is_equal(&l, &r))),
-                    BinOp::Lt => if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Bool(a < b)) } else { Err("'<' espera números".into()) },
-                    BinOp::Gt => if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Bool(a > b)) } else { Err("'>' espera números".into()) },
-                    BinOp::Le => if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Bool(a <= b)) } else { Err("'<=' espera números".into()) },
-                    BinOp::Ge => if let (Value::Number(a), Value::Number(b)) = (l, r) { Ok(Value::Bool(a >= b)) } else { Err("'>=' espera números".into()) },
+                    BinOp::Lt => if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                        Ok(Value::Bool(a < b)) 
+                    } else { 
+                        Err("'<' espera números".into()) 
+                    },
+                    BinOp::Gt => if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                        Ok(Value::Bool(a > b)) 
+                    } else { 
+                        Err("'>' espera números".into()) 
+                    },
+                    BinOp::Le => if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                        Ok(Value::Bool(a <= b)) 
+                    } else { 
+                        Err("'<=' espera números".into()) 
+                    },
+                    BinOp::Ge => if let (Value::Number(a), Value::Number(b)) = (l, r) { 
+                        Ok(Value::Bool(a >= b)) 
+                    } else { 
+                        Err("'>=' espera números".into()) 
+                    },
                     BinOp::And => Ok(Value::Bool(l.is_truthy() && r.is_truthy())),
                     BinOp::Or => Ok(Value::Bool(l.is_truthy() || r.is_truthy())),
                 }
@@ -334,20 +392,23 @@ impl Interpreter {
             Expr::Chamada(callee_expr, args_exprs) => {
                 let callee = self.evaluate(callee_expr)?;
                 let mut args_vals = Vec::new();
-                for a in args_exprs { args_vals.push(self.evaluate(a)?); }
+                for a in args_exprs { 
+                    args_vals.push(self.evaluate(a)?); 
+                }
+                
                 match callee {
                     Value::Function(f_rc) => {
                         let f = f_rc.clone();
-
+                        
                         if f.name == "imprimir" {
                             for (i, v) in args_vals.iter().enumerate() {
                                 if i > 0 { print!(" "); }
                                 print!("{}", v.to_string_repr());
                             }
                             println!();
-                            return Ok(value::Nil);
+                            return Ok(Value::Nil);
                         }
-
+                        
                         if f.name == "comprimento" {
                             if args_vals.len() != 1 {
                                 return Err("comprimento() espera 1 argumento".into());
@@ -358,7 +419,7 @@ impl Interpreter {
                                 _ => return Err("comprimento() espera texto ou array".into())
                             }
                         }
-
+                        
                         if f.name == "maiuscula" {
                             if args_vals.len() != 1 {
                                 return Err("maiuscula() espera 1 argumento".into());
@@ -368,8 +429,8 @@ impl Interpreter {
                             }
                             return Err("maiuscula() espera texto".into());
                         }
-
-                         if f.name == "minuscula" {
+                        
+                        if f.name == "minuscula" {
                             if args_vals.len() != 1 {
                                 return Err("minuscula() espera 1 argumento".into());
                             }

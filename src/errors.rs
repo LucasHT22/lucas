@@ -11,7 +11,7 @@ pub struct SourceLocation {
 pub enum ErrorType {
     LexicoError,
     SintaticoError,
-    RuntimeError
+    RuntimeError,
 }
 
 pub struct LucasError {
@@ -48,7 +48,7 @@ impl LucasError {
             ErrorType::RuntimeError => "Erro de Execução".red().bold(),
         };
 
-        println!("\n{} {}" "X".red(), tipo_str);
+        println!("\n{} {}", "❌".red(), tipo_str);
 
         if let Some(ref loc) = self.localizacao {
             self.exibir_com_contexto(loc);
@@ -76,9 +76,9 @@ impl LucasError {
 
         if linha_idx < linhas.len() {
             println!(" {} | {}", format!("{:3}", loc.linha).cyan().bold(), linhas[linha_idx]);
-        
+
             let espacos = " ".repeat(loc.coluna + 6);
-            println!(" {} {} {}", espacos, "^".red().bold(), self.mensagem.red());
+            println!("  {} {} {}", espacos, "^".red().bold(), self.mensagem.red());
         }
 
         if linha_idx + 1 < linhas.len() {
@@ -139,6 +139,6 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     matrix[len1][len2]
 }
 
-pub fn erro(msg &str) {
+pub fn erro(msg: &str) {
     LucasError::novo(ErrorType::RuntimeError, msg.to_string()).exibir();
 }
