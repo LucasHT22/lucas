@@ -9,6 +9,7 @@ pub enum Value {
     Text(String),
     Bool(bool),
     Nil,
+    Array(Rc<RefCell<Vec<Value>>>),
     Function(Rc<Function>),
 }
 
@@ -19,6 +20,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Number(n) => *n != 0.0,
             Value::Text(s) => !s.is_empty(),
+            Value::Array(arr) => !arr.borrow().is_empty(),
             Value::Function(_) => true,
         }
     }
@@ -31,6 +33,10 @@ impl Value {
             Value::Text(s) => s.clone(),
             Value::Bool(b) => format!("{}", b),
             Value::Nil => "nulo".into(),
+            Value::Array(arr) => {
+                let items: Vec<String> = arr.borrow().iter().map(|v| v.to_string_repr()).collect();
+                format!("[{}]", items.join(", "))
+            }
             Value::Function(f) => format!("<fn {}>", f.name),
         }
     }
@@ -42,6 +48,13 @@ pub struct Function {
     pub params: Vec<String>,
     pub body: Vec<Stmt>,
     pub closure: EnvRef,
+}
+
+pub enum FlowControl {
+    None,
+    Return(Value),
+    Break,
+    Continue,
 }
 
 impl Function {
@@ -58,35 +71,57 @@ impl Function {
         let mut ret_val: Option<Value> = None;
         for stmt in &self.body {
             match interpreter.execute(stmt) {
-                Ok(Some(v)) => { ret_val = Some(v); break; }
-                Ok(None) => {}
-                Err(e) => { interpreter.env = prev_env; return Err(e); }
+                FlowControl::Return(v) => { ret_val = v; break; }
+                FlowControl::Break | FlowControl::Continue => {
+                    interpreter.env = prev_env;
+                    return Err("'parar' ou 'continuar' fora de loop".into());
+                }
+                FlowControl::None => {}
             }
         }
         interpreter.env = prev_env;
-        Ok(ret_val.unwrap_or(Value::Nil))
+        Ok(ret_val)
     }
 }
 
 pub struct Interpreter {
     pub globals: EnvRef,
     pub env: EnvRef,
+    pub fonte: String,
 }
 
 impl Interpreter {
     pub fn new() -> Self { 
         let g = Rc::new(RefCell::new(Environment::new()));
-        let it = Self { globals: g.clone(), env: g.clone() };
-        {
-            let print_fn = Rc::new(Function {
-                name: "imprimir".into(),
-                params: vec!["x".into()],
-                body: vec![],
-                closure: it.globals.clone(),
-            });
-            it.globals.borrow_mut().define("imprimir".into(), Value::Function(print_fn));
-        }
-        it
+        let it = Self { globals: g.clone(), env: g.clone(), fonte: String::new(), };
+        
+        it.globals.borrow_mut().define("imprimir".into(), Value::Function(Rc::new(Function {
+            name: "imprimir".into(),
+            params: vec![],
+            body: vec![],
+            closure: it.globals.clone(),
+        })));
+
+        it.globals.borrow_mut().define("comprimento".into(), Value::Function(Rc::new(Function {
+            name: "comprimento".into(),
+            params: vec!["x".into()],
+            body: vec![],
+            closure: it.globals.clone(),
+        })));
+
+        it.globals.borrow_mut().define("maiuscula".into(), Value::Function(Rc::new(Function {
+            name: "maiuscula".into(),
+            params: vec!["x".into()],
+            body: vec![],
+            closure: it.globals.clone(),
+        })));
+
+        it.globals.borrow_mut().define("minuscula".into(), Value::Function(Rc::new(Function {
+            name: "minuscula".into(),
+            params: vec!["x".into()],
+            body: vec![],
+            closure: it.globals.clone(),
+        })));
     }
 
     pub fn run(&mut self, source: &str) {
@@ -103,46 +138,71 @@ impl Interpreter {
 
     pub fn execute(&mut self, stmt: &Stmt) -> Result<Option<Value>, String> {
         match stmt {
-            Stmt::ExprStmt(e) => { self.evaluate(e)?; Ok(None) }
+            Stmt::ExprStmt(e) => { self.evaluate(e)?; Ok(FlowControl::None) }
             Stmt::Imprimir(e) => {
                 let v = self.evaluate(e)?;
                 println!("{}", v.to_string_repr());
-                Ok(None)
+                Ok(FlowControl::None)
             }
             Stmt::VarDecl(name, init) => {
                 let v = self.evaluate(init)?;
                 self.env.borrow_mut().define(name.clone(), v);
-                Ok(None)
-            }
-            Stmt::Bloco(stmts) => {
-                let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
-                let prev = self.env.clone();
-                self.env = new_env;
-                for s in stmts {
-                    let r = self.execute(s)?;
-                    if r.is_some() {
-                        self.env = prev;
-                        return Ok(r);
-                    }
-                }
-                self.env = prev;
-                Ok(None)
+                Ok(FlowControl::None)
             }
             Stmt::If(cond, then_branch, else_branch) => {
                 let c = self.evaluate(cond)?;
                 if c.is_truthy() {
-                    return self.execute(then_branch);
+                    self.execute(then_branch)
                 } else if let Some(eb) = else_branch {
-                    return self.execute(eb);
+                    self.execute(eb)
                 } else { 
-                    Ok(None) 
+                    Ok(FlowControl::None)
                 }
             }
             Stmt::While(cond, body) => {
                 while self.evaluate(cond)?.is_truthy() {
-                    if let Some(v) = self.execute(body)? { return Ok(Some(v)); }
+                    match self.execute(body)? {
+                        FlowControl::Break => break,
+                        FlowControl::Continue => continue,
+                        FlowControl::Return(v) => return Ok(FlowControl::Return(v)),
+                        FlowControl::None => {}
+                    }
                 }
-                Ok(None)
+                Ok(FlowControl::None)
+            }
+            Stmt::For(init, cond, incr, body) => {
+                let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
+                let prev = self.env.clone();
+                self.env = new_env;
+
+                if let Some(init_stmt) = init {
+                    self.execute(init_stmt)?;
+                }
+
+                loop {
+                    if let Some(cond_expr) = cond {
+                        if !self.evaluate(cond_expr)?.is_truthy() {
+                            break;
+                        }
+                    }
+
+                    match self.execute(body)? {
+                        FlowControl::Break => break,
+                        FlowControl::Continue => {},
+                        FlowControl::Return(v) => {
+                            self.env = prev;
+                            return Ok(FlowControl::Return(v));
+                        }
+                        FlowControl::None => {}
+                    }
+
+                    if let Some(incr_expr) = incr {
+                        self.evaluate(incr_expr)?;
+                    }
+                }
+
+                self.env = prev;
+                Ok(FlowControl::None)
             }
             Stmt::FuncDecl(name, params, body) => {
                 let func = Function {
@@ -152,12 +212,18 @@ impl Interpreter {
                     closure: self.env.clone(),
                 };
                 self.env.borrow_mut().define(name.clone(), Value::Function(Rc::new(func)));
-                Ok(None)
+                Ok(FlowControl::None)
             }
             Stmt::Return(expr_opt) => {
-                if let Some(e) = expr_opt { let v = self.evaluate(e)?; return Ok(Some(v)); }
-                else { return Ok(Some(Value::Nil)); }
+                let v = if let Some(e) = expr_opt { 
+                    self.evaluate(e)? 
+                } else { 
+                    Value::Nil 
+                };
+                Ok(FlowControl::Return(v))
             }
+            Stmt::Break => Ok(FlowControl::Break),
+            Stmt::Continue => Ok(FlowControl::Continue),
         }
     }
 
@@ -167,6 +233,62 @@ impl Interpreter {
             Expr::Texto(s) => Ok(Value::Text(s.clone())),
             Expr::Bool(b) => Ok(Value::Bool(*b)),
             Expr::Nulo => Ok(Value::Nil),
+            Expr::Array(elementos) => {
+                let mut arr = Vec::new();
+                for elem in elementos {
+                    arr.push(self.evaluate(elem)?);
+                }
+                Ok(Value::Array(Rc::new(RefCell::new(arr))))
+            }
+            Expr::Index(arr_expr, idx_expr) => {
+                let arr_val = self.evaluate(arr_expr)?;
+                let idx_val = self.evaluate(idx_expr)?;
+                
+                match (arr_val, idx_val) {
+                    (Value::Array(arr), Value::Number(idx)) => {
+                        let i = idx as usize;
+                        let borrowed = arr.borrow();
+                        if i < borrowed.len() {
+                            Ok(borrowed[i].clone())
+                        } else {
+                            Err(format!("Índice {} fora dos limites (tamanho: {})", i, borrowed.len()))
+                        }
+                    }
+                    (Value::Text(s), Value::Number(idx)) => {
+                        let i = idx as usize;
+                        if i < s.len() {
+                            Ok(Value::Text(s.chars().nth(i).unwrap().to_string()))
+                        } else {
+                            Err(format!("Índice {} fora dos limites (tamanho: {})", i, s.len()))
+                        }
+                    }
+                    _ => Err("Indexação requer array/string e índice numérico".into())
+                }
+            }
+            Expr::Atribuir(name, value_expr) => {
+                let value = self.evaluate(value_expr)?;
+                self.env.borrow_mut().assign(name, value.clone())?;
+                Ok(value)
+            }
+            Expr::AtribuirIndex(arr_expr, idx_expr, value_expr) => {
+                let arr_val = self.evaluate(arr_expr)?;
+                let idx_val = self.evaluate(idx_expr)?;
+                let new_val = self.evaluate(value_expr)?;
+                
+                match (arr_val, idx_val) {
+                    (Value::Array(arr), Value::Number(idx)) => {
+                        let i = idx as usize;
+                        let mut borrowed = arr.borrow_mut();
+                        if i < borrowed.len() {
+                            borrowed[i] = new_val.clone();
+                            Ok(new_val)
+                        } else {
+                            Err(format!("Índice {} fora dos limites", i))
+                        }
+                    }
+                    _ => Err("Atribuição de índice requer array e índice numérico".into())
+                }
+            }
             Expr::Var(name) => self.env.borrow().get(name),
             Expr::Unario(op, right) => {
                 let r = self.evaluate(right)?;
@@ -216,19 +338,47 @@ impl Interpreter {
                 match callee {
                     Value::Function(f_rc) => {
                         let f = f_rc.clone();
-                        if f.name == "imprimir" && f.params.len() <= 1 {
-                            if args_vals.len() >= 1 {
-                                for (i, v) in args_vals.iter().enumerate() {
-                                    if i>0 { print!(" "); }
-                                    print!("{}", v.to_string_repr());
-                                }
-                                println!();
-                                return Ok(Value::Nil);
-                            } else {
-                                println!();
-                                return Ok(Value::Nil);
+
+                        if f.name == "imprimir" {
+                            for (i, v) in args_vals.iter().enumerate() {
+                                if i > 0 { print!(" "); }
+                                print!("{}", v.to_string_repr());
+                            }
+                            println!();
+                            return Ok(value::Nil);
+                        }
+
+                        if f.name == "comprimento" {
+                            if args_vals.len() != 1 {
+                                return Err("comprimento() espera 1 argumento".into());
+                            }
+                            match &args_vals[0] {
+                                Value::Text(s) => return Ok(Value::Number(s.len() as f64)),
+                                Value::Array(arr) => return Ok(Value::Number(arr.borrow().len() as f64)),
+                                _ => return Err("comprimento() espera texto ou array".into())
                             }
                         }
+
+                        if f.name == "maiuscula" {
+                            if args_vals.len() != 1 {
+                                return Err("maiuscula() espera 1 argumento".into());
+                            }
+                            if let Value::Text(s) = &args_vals[0] {
+                                return Ok(Value::Text(s.to_uppercase()));
+                            }
+                            return Err("maiuscula() espera texto".into());
+                        }
+
+                         if f.name == "minuscula" {
+                            if args_vals.len() != 1 {
+                                return Err("minuscula() espera 1 argumento".into());
+                            }
+                            if let Value::Text(s) = &args_vals[0] {
+                                return Ok(Value::Text(s.to_lowercase()));
+                            }
+                            return Err("minuscula() espera texto".into());
+                        }
+                        
                         f.call(self, args_vals)
                     }
                     _ => Err("Tentativa de chamar algo que não é função".into())

@@ -8,3 +8,4 @@ license = "MIT"
 
 [dependencies]
 lazy_static = "1.4"
+colored = "2.1"

@@ -5,6 +5,7 @@ pub struct Lexer {
     src: Vec<char>,
     pos: usize,
     linha: usize,
+    coluna: usize,
 }
 
 impl Lexer {
@@ -13,6 +14,7 @@ impl Lexer {
             src: s.chars().collect(),
             pos: 0,
             linha: 1,
+            coluna: 1,
         }
     }
 
@@ -24,6 +26,7 @@ impl Lexer {
         let c = self.espiar();
         if c.is_some() {
             self.pos += 1;
+            self.coluna += 1;
         }
         c
     }
@@ -32,6 +35,7 @@ impl Lexer {
         if let Some(c) = self.espiar() {
             if c == esperado {
                 self.pos += 1;
+                self.coluna += 1;
                 return true;
             }
         }
@@ -46,6 +50,7 @@ impl Lexer {
                 }
                 Some('\n') => {
                     self.linha += 1;
+                    self.coluna = 1;
                     self.avancar();
                 }
                 Some('/') => {
@@ -116,6 +121,14 @@ impl Lexer {
                     self.avancar();
                     Token::new(FechaChave, "}".into(), linha)
                 }
+                '[' => {
+                    self.avancar();
+                    Token::new(AbreColchete, "[".into(), linha)
+                }
+                ']' => {
+                    self.avancar();
+                    Token::new(FechaColchete, "]".into(), linha)
+                }
                 ';' => {
                     self.avancar();
                     Token::new(PontoVirgula, ";".into(), linha)
@@ -165,6 +178,7 @@ impl Lexer {
                         }
                         if ch2 == '\n' {
                             self.linha += 1;
+                            self.coluna = 1;
                         }
                         s.push(ch2);
                         self.avancar();

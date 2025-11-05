@@ -17,6 +17,8 @@ pub enum TokenType {
     E,
     Ou,
     Nao,
+    Break,
+    Continue,
     Mais,
     Menos,
     Multiplica,
@@ -32,6 +34,8 @@ pub enum TokenType {
     FechaPar,
     AbreChave,
     FechaChave,
+    AbreColchete,
+    FechaColchete,
     Virgula,
     PontoVirgula,
     Fim,
@@ -42,10 +46,15 @@ pub struct Token {
     pub tipo: TokenType,
     pub lexema: String,
     pub linha: usize,
+    pub coluna: usize,
 }
 
 impl Token {
     pub fn new(tipo: TokenType, lexema: String, linha: usize) -> Self {
-        Self { tipo, lexema, linha }
+        Self { tipo, lexema, linha, coluna: 0 }
+    }
+    
+    pub fn with_column(tipo: TokenType, lexema: String, linha: usize, coluna: usize) -> Self {
+        Self { tipo, lexema, linha, coluna }
     }
 }

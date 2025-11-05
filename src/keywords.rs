@@ -18,5 +18,7 @@ pub fn palavras_chave() -> HashMap<&'static str, TokenType> {
         ("ou", Ou),
         ("nao", Nao),
         ("nulo", Nulo),
+        ("parar", Break),
+        ("continuar", Continue),
     ])
 }

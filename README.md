@@ -27,3 +27,5 @@ cargo run
 ### Resources
 
 - [Crafting Inpreters](https://craftinginterpreters.com/)
+- [Levenshtein distance - Wikipedia](https://en.wikipedia.org/wiki/Levenshtein_distance)
+- [Ruby IRB (REPL)](https://github.com/ruby/irb)
