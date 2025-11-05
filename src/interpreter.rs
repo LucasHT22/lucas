@@ -71,9 +71,9 @@ impl Function {
         
         let mut ret_val = Value::Nil;
         for stmt in &self.body {
-            match interpreter.execute(stmt)? {
-                Some(v) => { ret_val = v; break; }
-                None => {}
+            if let Some(v) = interpreter.execute(stmt)? {
+                ret_val = v;
+                break;
             }
         }
         interpreter.env = prev_env;
@@ -123,6 +123,8 @@ impl Interpreter {
             body: vec![],
             closure: it.globals.clone(),
         })));
+        
+        it
     }
 
     pub fn run(&mut self, source: &str) {
@@ -138,21 +140,21 @@ impl Interpreter {
         }
     }
 
-    pub fn execute(&mut self, stmt: &Stmt) -> Result<FlowControl, String> {
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<Option<Value>, String> {
         match stmt {
             Stmt::ExprStmt(e) => { 
                 self.evaluate(e)?; 
-                Ok(FlowControl::None) 
+                Ok(None) 
             }
             Stmt::Imprimir(e) => {
                 let v = self.evaluate(e)?;
                 println!("{}", v.to_string_repr());
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::VarDecl(name, init) => {
                 let v = self.evaluate(init)?;
                 self.env.borrow_mut().define(name.clone(), v);
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::Bloco(stmts) => {
                 let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
@@ -160,16 +162,14 @@ impl Interpreter {
                 self.env = new_env;
                 
                 for s in stmts {
-                    match self.execute(s)? {
-                        FlowControl::None => {}
-                        flow => {
-                            self.env = prev;
-                            return Ok(flow);
-                        }
+                    let result = self.execute(s)?;
+                    if result.is_some() {
+                        self.env = prev;
+                        return Ok(result);
                     }
                 }
                 self.env = prev;
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::If(cond, then_branch, else_branch) => {
                 let c = self.evaluate(cond)?;
@@ -178,19 +178,16 @@ impl Interpreter {
                 } else if let Some(eb) = else_branch {
                     self.execute(eb)
                 } else { 
-                    Ok(FlowControl::None)
+                    Ok(None)
                 }
             }
             Stmt::While(cond, body) => {
                 while self.evaluate(cond)?.is_truthy() {
-                    match self.execute(body)? {
-                        FlowControl::Break => break,
-                        FlowControl::Continue => continue,
-                        FlowControl::Return(v) => return Ok(FlowControl::Return(v)),
-                        FlowControl::None => {}
+                    if let Some(v) = self.execute(body)? {
+                        return Ok(Some(v));
                     }
                 }
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::For(init, cond, incr, body) => {
                 let new_env = Rc::new(RefCell::new(Environment::with_enclosing(self.env.clone())));
@@ -208,14 +205,9 @@ impl Interpreter {
                         }
                     }
                     
-                    match self.execute(body)? {
-                        FlowControl::Break => break,
-                        FlowControl::Continue => {},
-                        FlowControl::Return(v) => {
-                            self.env = prev;
-                            return Ok(FlowControl::Return(v));
-                        }
-                        FlowControl::None => {}
+                    if let Some(v) = self.execute(body)? {
+                        self.env = prev;
+                        return Ok(Some(v));
                     }
                     
                     if let Some(incr_expr) = incr {
@@ -224,7 +216,7 @@ impl Interpreter {
                 }
                 
                 self.env = prev;
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::FuncDecl(name, params, body) => {
                 let func = Function {
@@ -234,7 +226,7 @@ impl Interpreter {
                     closure: self.env.clone(),
                 };
                 self.env.borrow_mut().define(name.clone(), Value::Function(Rc::new(func)));
-                Ok(FlowControl::None)
+                Ok(None)
             }
             Stmt::Return(expr_opt) => {
                 let v = if let Some(e) = expr_opt { 
@@ -242,10 +234,10 @@ impl Interpreter {
                 } else { 
                     Value::Nil 
                 };
-                Ok(FlowControl::Return(v))
+                Ok(Some(v))
             }
-            Stmt::Break => Ok(FlowControl::Break),
-            Stmt::Continue => Ok(FlowControl::Continue),
+            Stmt::Break => Ok(None),
+            Stmt::Continue => Ok(None),
         }
     }
 
